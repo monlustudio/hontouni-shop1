@@ -8,7 +8,7 @@ st.set_page_config(
     page_title="紅斗泥大福訂單管理系統", page_icon="🍡", layout="wide"
 )
 
-# --- 自訂 CSS 主題樣式 (#cd9e97 背景、#946660 按鈕、白字、下拉選單白底黑字) ---
+# --- 自訂 CSS 主題樣式 (#cd9e97 背景、#946660 按鈕、金色導航按鈕、白字、下拉選單白底黑字) ---
 st.markdown("""
 <style>
     /* 全體背景與主色調 */
@@ -22,7 +22,7 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* 按鈕樣式: 背景 #946660, 字體白色 */
+    /* 一般按鈕樣式: 背景 #946660, 字體白色 */
     div.stButton > button, div.stFormSubmitButton > button {
         background-color: #946660 !important;
         color: #ffffff !important;
@@ -33,6 +33,11 @@ st.markdown("""
     div.stButton > button:hover, div.stFormSubmitButton > button:hover {
         background-color: #7d544f !important;
         color: #ffffff !important;
+    }
+
+    /* 指定日曆導航的三顆按鈕改為金色 (#d4af37) */
+    button[kind="secondary"] {
+        /* 針對特定按鈕的樣式微調 */
     }
 
     /* 下拉選單 (Selectbox) 白底黑字 */
@@ -201,7 +206,6 @@ if "new_order_date" not in st.session_state:
 if "item_count" not in st.session_state:
   st.session_state["item_count"] = 1
 
-# 表單欄位清空用的 version key (遞增時輸入框會被強制清空重置)
 if "form_reset_counter" not in st.session_state:
   st.session_state["form_reset_counter"] = 0
 
@@ -210,15 +214,35 @@ if "form_reset_counter" not in st.session_state:
 # ==========================================
 st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-# 1. 最上方：【日曆播報器與日期切換】
+# 1. 最上方：【日曆導航列 (強制同一行並設定金色按鈕)】
 cur_date = st.session_state["selected_date"]
 orders_df = get_orders_by_date(str(cur_date))
 
-col_prev, col_date_picker, col_next, col_today = st.columns([1, 2, 1, 1])
+# 自訂金色按鈕的 CSS 覆蓋這三顆按鈕
+st.markdown("""
+<style>
+    /* 將指定的三顆導航按鈕背景改為金色 #d4af37，文字黑色或深色以保持清晰 */
+    div.row-widget.stButton > button[key*="nav_"] {
+        background-color: #d4af37 !important;
+        color: #222222 !important;
+        font-weight: bold !important;
+    }
+    div.row-widget.stButton > button[key*="nav_"]:hover {
+        background-color: #b89728 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# 讓前一天、日期選擇、後一天、回到今天排在同一行
+col_prev, col_date_picker, col_next, col_today = st.columns([1, 1.8, 1, 1])
+
 with col_prev:
-  if st.button("◀ 前一天", use_container_width=True):
+  st.write("")  # 垂直微調對齊日期輸入框
+  st.write("")
+  if st.button("◀ 前一天", key="nav_prev", use_container_width=True):
     st.session_state["selected_date"] = cur_date - timedelta(days=1)
     st.rerun()
+
 with col_date_picker:
   selected_date_input = st.date_input(
       "選擇日期", value=cur_date, label_visibility="collapsed"
@@ -226,12 +250,18 @@ with col_date_picker:
   if selected_date_input != cur_date:
     st.session_state["selected_date"] = selected_date_input
     st.rerun()
+
 with col_next:
-  if st.button("後一天 ▶", use_container_width=True):
+  st.write("")
+  st.write("")
+  if st.button("後一天 ▶", key="nav_next", use_container_width=True):
     st.session_state["selected_date"] = cur_date + timedelta(days=1)
     st.rerun()
+
 with col_today:
-  if st.button("🏠 回到今天", use_container_width=True):
+  st.write("")
+  st.write("")
+  if st.button("🏠 回到今天", key="nav_today", use_container_width=True):
     st.session_state["selected_date"] = datetime.now().date()
     st.rerun()
 
@@ -271,7 +301,6 @@ st.divider()
 st.subheader("➕ 快速新增訂單")
 
 with st.container():
-  # 用 counter 來重置輸入框
   f_key = st.session_state["form_reset_counter"]
 
   col_n1, col_n2 = st.columns(2)
@@ -288,7 +317,6 @@ with st.container():
         key=f"input_phone_{f_key}",
     )
 
-  # 品項與口味編輯彈跳按鈕同一行
   c_lbl, c_btn = st.columns([3, 1])
   with c_lbl:
     st.markdown("##### 🛒 訂購品項")
@@ -364,7 +392,6 @@ with st.container():
     )
 
   with col_date_col:
-    # 預定取貨日期 + 快捷按鈕 [今天]
     cd_label, cd_btn = st.columns([2.2, 1])
     with cd_label:
       pickup_date = st.date_input(
@@ -373,7 +400,7 @@ with st.container():
           key=f"date_new_{f_key}",
       )
     with cd_btn:
-      st.write("")  # 垂直微調對齊
+      st.write("")
       st.write("")
       if st.button("📍 今天", use_container_width=True):
         st.session_state["new_order_date"] = datetime.now().date()
@@ -404,7 +431,6 @@ with st.container():
           phone,
           note,
       )
-      # 重置品項數與表單 counter
       st.session_state.item_count = 1
       st.session_state["form_reset_counter"] += 1
       st.success(f"🎉 新增成功！已建立 {name} 的訂單。")
