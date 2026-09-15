@@ -399,65 +399,8 @@ if app_mode == "⚙️ 編輯口味清單":
 elif app_mode == "📋 訂單與取貨主頁":
   st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-  cur_date = st.session_state["selected_date"]
-  orders_df = get_orders_by_date(str(cur_date))
-
-  col_prev, col_date_picker, col_next, col_today = st.columns(
-      [1.2, 1.8, 1.2, 1.2]
-  )
-  with col_prev:
-    if st.button("◀ 前一天", use_container_width=True):
-      st.session_state["selected_date"] = cur_date - timedelta(days=1)
-      st.rerun()
-  with col_date_picker:
-    selected_date_input = st.date_input(
-        "選擇日期", value=cur_date, label_visibility="collapsed"
-    )
-    if selected_date_input != cur_date:
-      st.session_state["selected_date"] = selected_date_input
-      st.rerun()
-  with col_next:
-    if st.button("後一天 ▶", use_container_width=True):
-      st.session_state["selected_date"] = cur_date + timedelta(days=1)
-      st.rerun()
-  with col_today:
-    if st.button("🏠 今天", use_container_width=True):
-      st.session_state["selected_date"] = datetime.now().date()
-      st.rerun()
-
-  # 統計當日口味需求
-  flavor_summary_dict = {}
-  total_orders_count = len(orders_df)
-  for _, row in orders_df.iterrows():
-    items_text = row["items"]
-    parts = items_text.split(",")
-    for p in parts:
-      p = p.strip()
-      if "x" in p:
-        sub_parts = p.split("x")
-        f_name = sub_parts[0].strip()
-        try:
-          f_qty = int(sub_parts[1].strip())
-        except:
-          f_qty = 1
-        flavor_summary_dict[f_name] = (
-            flavor_summary_dict.get(f_name, 0) + f_qty
-        )
-
-  summary_str_list = [f"{k} × {v}" for k, v in flavor_summary_dict.items()]
-  summary_text_joined = (
-      "、".join(summary_str_list) if summary_str_list else "目前尚無訂單"
-  )
-
-  st.info(
-      f"📢 **【{cur_date} 每日播報摘要】** 共 **{total_orders_count}** 筆訂單"
-      f" ｜ 總計需備貨：**{summary_text_joined}**"
-  )
-
-  st.divider()
-
   # ==========================================
-  # 2. 上半部：快速新增訂單
+  # 1. 最上方：快速新增訂單區 (移到最上方)
   # ==========================================
   st.subheader("➕ 快速新增訂單")
 
@@ -516,7 +459,7 @@ elif app_mode == "📋 訂單與取貨主頁":
     with col_date_col:
       pickup_date = st.date_input(
           "預定取貨日期",
-          value=cur_date,
+          value=st.session_state["selected_date"],
           key=f"date_new_{f_key}",
       )
 
@@ -551,6 +494,64 @@ elif app_mode == "📋 訂單與取貨主頁":
         st.rerun()
 
   st.divider()
+
+  # ==========================================
+  # 2. 中間/下方：日曆播報器與日期切換
+  # ==========================================
+  cur_date = st.session_state["selected_date"]
+  orders_df = get_orders_by_date(str(cur_date))
+
+  col_prev, col_date_picker, col_next, col_today = st.columns(
+      [1.2, 1.8, 1.2, 1.2]
+  )
+  with col_prev:
+    if st.button("◀ 前一天", use_container_width=True):
+      st.session_state["selected_date"] = cur_date - timedelta(days=1)
+      st.rerun()
+  with col_date_picker:
+    selected_date_input = st.date_input(
+        "選擇日期", value=cur_date, label_visibility="collapsed"
+    )
+    if selected_date_input != cur_date:
+      st.session_state["selected_date"] = selected_date_input
+      st.rerun()
+  with col_next:
+    if st.button("後一天 ▶", use_container_width=True):
+      st.session_state["selected_date"] = cur_date + timedelta(days=1)
+      st.rerun()
+  with col_today:
+    if st.button("🏠 今天", use_container_width=True):
+      st.session_state["selected_date"] = datetime.now().date()
+      st.rerun()
+
+  # 統計當日口味需求
+  flavor_summary_dict = {}
+  total_orders_count = len(orders_df)
+  for _, row in orders_df.iterrows():
+    items_text = row["items"]
+    parts = items_text.split(",")
+    for p in parts:
+      p = p.strip()
+      if "x" in p:
+        sub_parts = p.split("x")
+        f_name = sub_parts[0].strip()
+        try:
+          f_qty = int(sub_parts[1].strip())
+        except:
+          f_qty = 1
+        flavor_summary_dict[f_name] = (
+            flavor_summary_dict.get(f_name, 0) + f_qty
+        )
+
+  summary_str_list = [f"{k} × {v}" for k, v in flavor_summary_dict.items()]
+  summary_text_joined = (
+      "、".join(summary_str_list) if summary_str_list else "目前尚無訂單"
+  )
+
+  st.info(
+      f"📢 **【{cur_date} 每日播報摘要】** 共 **{total_orders_count}** 筆訂單"
+      f" ｜ 總計需備貨：**{summary_text_joined}**"
+  )
 
   # ==========================================
   # 3. 下半部：取貨清單管理
