@@ -35,11 +35,6 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* 特殊金色按鈕樣式 (前一天、後一天、回到今天) */
-    button[kind="secondary"] {
-        /* 預設覆蓋 */
-    }
-
     /* 下拉選單 (Selectbox) 白底黑字 */
     div[data-baseweb="select"] > div {
         background-color: #ffffff !important;
@@ -48,6 +43,19 @@ st.markdown("""
     }
     div[data-baseweb="select"] span, div[data-baseweb="select"] input, div[data-baseweb="select"] div {
         color: #000000 !important;
+    }
+
+    /* 彈跳視窗 (Popover 內部) 文字與輸入框強制改為黑色，確保清晰可見 */
+    div[data-testid="stPopoverBody"] label, 
+    div[data-testid="stPopoverBody"] p, 
+    div[data-testid="stPopoverBody"] h3, 
+    div[data-testid="stPopoverBody"] span,
+    div[data-testid="stPopoverBody"] div {
+        color: #000000 !important;
+    }
+    div[data-testid="stPopoverBody"] input {
+        color: #000000 !important;
+        background-color: #ffffff !important;
     }
 
     /* 容器與卡片微調 */
@@ -214,55 +222,45 @@ if "form_reset_counter" not in st.session_state:
 # ==========================================
 st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-# 1. 最上方：【日曆播報器與日期切換 (金色按鈕)】
+# 1. 最上方：【日曆播報器與日期切換（同一列佈局，金色按鈕）】
 cur_date = st.session_state["selected_date"]
 orders_df = get_orders_by_date(str(cur_date))
 
-# 自訂金色按鈕的 inline CSS 樣式
-gold_btn_style = (
-    "background-color: #D4AF37 !important; color: #FFFFFF !important;"
-    " font-weight: bold !important; border-radius: 8px !important; border:"
-    " none !important;"
+# 自訂金色按鈕的 CSS 覆蓋
+st.markdown("""
+<style>
+    /* 將前一天、後一天、回到今天按鈕改成金色 #c59b27 */
+    div.stButton > button[kind="secondary"] {
+        background-color: #c59b27 !important;
+    }
+    div.stButton > button[kind="secondary"]:hover {
+        background-color: #a88220 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+col_prev, col_date_picker, col_next, col_today = st.columns(
+    [1.1, 2.2, 1.1, 1.1]
 )
-
-col_prev, col_date_picker, col_next, col_today = st.columns([1, 1.8, 1, 1])
-
 with col_prev:
-  st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-  if st.button(
-      "◀ 前一天", use_container_width=True, key="btn_prev_date"
-  ):
+  if st.button("◀ 前一天", use_container_width=True, key="btn_prev"):
     st.session_state["selected_date"] = cur_date - timedelta(days=1)
     st.rerun()
-
 with col_date_picker:
   selected_date_input = st.date_input(
-      "選擇日期", value=cur_date, label_visibility="visible"
+      "選擇日期", value=cur_date, label_visibility="collapsed"
   )
   if selected_date_input != cur_date:
     st.session_state["selected_date"] = selected_date_input
     st.rerun()
-
 with col_next:
-  st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-  if st.button("後一天 ▶", use_container_width=True, key="btn_next_date"):
+  if st.button("後一天 ▶", use_container_width=True, key="btn_next"):
     st.session_state["selected_date"] = cur_date + timedelta(days=1)
     st.rerun()
-
 with col_today:
-  st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-  if st.button("🏠 回到今天", use_container_width=True, key="btn_today_date"):
+  if st.button("🏠 回到今天", use_container_width=True, key="btn_today"):
     st.session_state["selected_date"] = datetime.now().date()
     st.rerun()
-
-# 強制將這三顆日曆按鈕套用金色樣式
-st.markdown(f"""
-<style>
-    button[key*="btn_prev_date"], button[key*="btn_next_date"], button[key*="btn_today_date"] {{
-        {gold_btn_style}
-    }}
-</style>
-""", unsafe_allow_html=True)
 
 # 統計當日口味需求
 flavor_summary_dict = {}
@@ -322,10 +320,10 @@ with st.container():
     st.markdown("##### 🛒 訂購品項")
   with c_btn:
     with st.popover("⚙️ 新增/編輯口味"):
-      st.write("### 管理下拉選單口味")
+      st.markdown("### 管理下拉選單口味")
       flavors_list = get_flavors()
       new_flavor_input = st.text_input("新口味名稱", key="new_flav_input")
-      if st.button("➕ 新增口味"):
+      if st.button("➕ 新增口味", key="add_flav_btn"):
         if new_flavor_input.strip():
           conn = sqlite3.connect(DB_FILE)
           c = conn.cursor()
@@ -341,7 +339,7 @@ with st.container():
             st.warning("該口味已存在！")
           conn.close()
 
-      st.write("現有口味列表：")
+      st.markdown("現有口味列表：")
       for f in flavors_list:
         fc1, fc2 = st.columns([3, 1])
         fc1.text(f)
@@ -372,9 +370,8 @@ with st.container():
     )
     selected_items_list.append(f"{f_sel} x {q_sel}")
 
-  # 僅保留「增加一個口味」按鈕，移除重置按鈕
-  c_add_btn, _ = st.columns([1, 2])
-  if c_add_btn.button("➕ 增加一個口味"):
+  c_add_btn, _ = st.columns([1, 3])
+  if c_add_btn.button("➕ 增加一個口味", key="btn_add_flavor_row"):
     st.session_state.item_count += 1
     st.rerun()
 
@@ -390,19 +387,11 @@ with st.container():
     )
 
   with col_date_col:
-    cd_label, cd_btn = st.columns([2.2, 1])
-    with cd_label:
-      pickup_date = st.date_input(
-          "預定取貨日期",
-          value=st.session_state["new_order_date"],
-          key=f"date_new_{f_key}",
-      )
-    with cd_btn:
-      st.write("")
-      st.write("")
-      if st.button("📍 今天", use_container_width=True):
-        st.session_state["new_order_date"] = datetime.now().date()
-        st.rerun()
+    pickup_date = st.date_input(
+        "預定取貨日期",
+        value=st.session_state["new_order_date"],
+        key=f"date_new_{f_key}",
+    )
 
   with col_slot:
     time_slot = st.radio(
