@@ -4,9 +4,7 @@ import os
 import streamlit as st
 
 # 設定網頁標題與寬螢幕版面
-st.set_page_config(
-    page_title="紅斗泥大福訂單管理系統", page_type="wide", layout="wide"
-)
+st.set_page_config(page_title="紅斗泥大福訂單管理系統", layout="wide")
 
 # 預設的口味清單（您可以隨時在這裡新增或修改）
 DEFAULT_FLAVORS = [
