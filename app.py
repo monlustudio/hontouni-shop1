@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
+from streamlit_sortables import sort_items  # 引入拖曳排序套件
 
 # 設定頁面寬度與標題
 st.set_page_config(
@@ -103,9 +104,7 @@ def init_db():
 
   c.execute("SELECT COUNT(*) FROM flavors")
   if c.fetchone()[0] == 0:
-    # 根據您上傳的 MENU 最新菜單品項
     default_flavors = [
-        # 季節限定口味
         "綠桔雙拼水果大福",
         "法式奶酥桔大福",
         "奶油綠豆桔大福",
@@ -118,7 +117,6 @@ def init_db():
         "奶油綠豆柿大福",
         "紅豆柿大福",
         "水果雙拼茶韻大福",
-        # 常態口味
         "乳酪綜合大福",
         "芋頭奶凍大福",
         "法式奶酥紅豆大福",
@@ -181,36 +179,13 @@ def update_flavor_name(flavor_id, new_name):
   return success
 
 
-def move_flavor_order(flavor_id, direction):
+def save_new_flavor_order(sorted_names):
+  """透過拖曳後的完整清單順序重新寫入資料庫排序"""
   conn = sqlite3.connect(DB_FILE)
   c = conn.cursor()
-  df = get_flavor_records()
-  records = df.to_dict("records")
-
-  idx = next((i for i, r in enumerate(records) if r["id"] == flavor_id), None)
-  if idx is not None:
-    if direction == "up" and idx > 0:
-      target_idx = idx - 1
-    elif direction == "down" and idx < len(records) - 1:
-      target_idx = idx + 1
-    else:
-      conn.close()
-      return
-
-    id1, order1 = records[idx]["id"], records[idx]["sort_order"]
-    id2, order2 = records[target_idx]["id"], records[target_idx]["sort_order"]
-
-    if order1 == order2:
-      for i, r in enumerate(records):
-        c.execute(
-            "UPDATE flavors SET sort_order = ? WHERE id = ?", (i, r["id"])
-        )
-      order1 = idx
-      order2 = target_idx if direction == "down" else idx - 1
-
-    c.execute("UPDATE flavors SET sort_order = ? WHERE id = ?", (order2, id1))
-    c.execute("UPDATE flavors SET sort_order = ? WHERE id = ?", (order1, id2))
-    conn.commit()
+  for idx, name in enumerate(sorted_names):
+    c.execute("UPDATE flavors SET sort_order = ? WHERE flavor_name = ?", (idx, name))
+  conn.commit()
   conn.close()
 
 
@@ -311,14 +286,15 @@ st.sidebar.title("🍡 紅斗泥管理選單")
 app_mode = st.sidebar.radio("選擇功能頁面", ["📋 訂單與取貨主頁", "⚙️ 編輯口味清單"])
 
 # ==========================================
-# 頁面一：編輯口味清單
+# 頁面一：編輯口味清單 (支援拖曳排序、修改名稱、刪除)
 # ==========================================
 if app_mode == "⚙️ 編輯口味清單":
   st.title("⚙️ 編輯與管理下拉選單口味")
   st.write(
-      "在這裡您可以新增口味、修改名稱，或是透過上下按鈕調整菜單顯示順序："
+      "在這裡您可以新增口味、修改名稱，或直接**用滑鼠按住項目上下拖曳**來調整選單順序："
   )
 
+  # 新增口味區
   with st.container():
     new_flavor_input = st.text_input("輸入新口味名稱")
     if st.button("➕ 新增口味"):
@@ -342,56 +318,50 @@ if app_mode == "⚙️ 編輯口味清單":
         conn.close()
 
   st.divider()
-  st.subheader("現有口味與排序調整")
+  st.subheader("📋 拖曳排序清單")
+  st.info("提示：直接用滑鼠拖曳下方清單中的項目即可調整順序！")
 
+  current_flavors = get_flavors()
+
+  # 呼叫 sort_items 建立拖曳互動介面
+  sorted_flavors = sort_items(current_flavors, key="flavor_sort_list")
+
+  # 如果使用者拖曳改變了順序，自動儲存
+  if sorted_flavors != current_flavors:
+    save_new_flavor_order(sorted_flavors)
+    st.rerun()
+
+  st.divider()
+  st.subheader("✏️ 修改名稱或刪除特定口味")
   flavors_df = get_flavor_records()
+  for idx, row in flavors_df.iterrows():
+    f_id = row["id"]
+    f_name = row["flavor_name"]
 
-  if flavors_df.empty:
-    st.info("目前沒有設定任何口味。")
-  else:
-    for idx, row in flavors_df.iterrows():
-      f_id = row["id"]
-      f_name = row["flavor_name"]
-
-      with st.container():
-        c_name, c_up, c_down, c_edit, c_del = st.columns(
-            [2.5, 0.8, 0.8, 1.2, 0.8]
-        )
-
-        with c_name:
-          st.markdown(f"**{f_name}**")
-
-        with c_up:
-          if st.button("⬆️ 往上", key=f"up_{f_id}"):
-            move_flavor_order(f_id, "up")
-            st.rerun()
-
-        with c_down:
-          if st.button("⬇️ 往下", key=f"down_{f_id}"):
-            move_flavor_order(f_id, "down")
-            st.rerun()
-
-        with c_edit:
-          with st.popover("✏️ 編輯"):
-            edit_name_input = st.text_input(
-                "修改名稱", value=f_name, key=f"edit_input_{f_id}"
-            )
-            if st.button("💾 儲存", key=f"save_edit_{f_id}"):
-              if edit_name_input.strip():
-                if update_flavor_name(f_id, edit_name_input.strip()):
-                  st.success("修改成功！")
-                  st.rerun()
-                else:
-                  st.error("修改失敗，該名稱可能已存在！")
-
-        with c_del:
-          if st.button("🗑️ 刪除", key=f"del_flav_{f_id}"):
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute("DELETE FROM flavors WHERE id = ?", (f_id,))
-            conn.commit()
-            conn.close()
-            st.rerun()
+    with st.container():
+      c_name, c_edit, c_del = st.columns([3, 1.5, 1])
+      with c_name:
+        st.markdown(f"**{f_name}**")
+      with c_edit:
+        with st.popover("✏️ 編輯名稱"):
+          edit_name_input = st.text_input(
+              "修改名稱", value=f_name, key=f"edit_input_{f_id}"
+          )
+          if st.button("💾 儲存", key=f"save_edit_{f_id}"):
+            if edit_name_input.strip():
+              if update_flavor_name(f_id, edit_name_input.strip()):
+                st.success("修改成功！")
+                st.rerun()
+              else:
+                st.error("修改失敗，該名稱可能已存在！")
+      with c_del:
+        if st.button("🗑️ 刪除", key=f"del_flav_{f_id}"):
+          conn = sqlite3.connect(DB_FILE)
+          c = conn.cursor()
+          c.execute("DELETE FROM flavors WHERE id = ?", (f_id,))
+          conn.commit()
+          conn.close()
+          st.rerun()
 
 # ==========================================
 # 頁面二：訂單與取貨主頁
@@ -399,9 +369,7 @@ if app_mode == "⚙️ 編輯口味清單":
 elif app_mode == "📋 訂單與取貨主頁":
   st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-  # ==========================================
-  # 1. 最上方：快速新增訂單區 (移到最上方)
-  # ==========================================
+  # 1. 快速新增訂單區 (置於最上方)
   st.subheader("➕ 快速新增訂單")
 
   with st.container():
@@ -495,9 +463,7 @@ elif app_mode == "📋 訂單與取貨主頁":
 
   st.divider()
 
-  # ==========================================
-  # 2. 中間/下方：日曆播報器與日期切換
-  # ==========================================
+  # 2. 日曆播報器與日期切換
   cur_date = st.session_state["selected_date"]
   orders_df = get_orders_by_date(str(cur_date))
 
@@ -553,9 +519,7 @@ elif app_mode == "📋 訂單與取貨主頁":
       f" ｜ 總計需備貨：**{summary_text_joined}**"
   )
 
-  # ==========================================
   # 3. 下半部：取貨清單管理
-  # ==========================================
   st.subheader(f"📋 【{cur_date}】取貨與出貨清單")
 
   if orders_df.empty:
