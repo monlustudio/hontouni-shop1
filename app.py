@@ -8,7 +8,7 @@ st.set_page_config(
     page_title="紅斗泥大福訂單管理系統", page_icon="🍡", layout="wide"
 )
 
-# --- 自訂 CSS 主題樣式 (#cd9e97 背景、#946660 按鈕、金色導航按鈕、白字、下拉選單白底黑字) ---
+# --- 自訂 CSS 主題樣式 ---
 st.markdown("""
 <style>
     /* 全體背景與主色調 */
@@ -35,9 +35,9 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* 指定日曆導航的三顆按鈕改為金色 (#d4af37) */
+    /* 特殊金色按鈕樣式 (前一天、後一天、回到今天) */
     button[kind="secondary"] {
-        /* 針對特定按鈕的樣式微調 */
+        /* 預設覆蓋 */
     }
 
     /* 下拉選單 (Selectbox) 白底黑字 */
@@ -214,56 +214,55 @@ if "form_reset_counter" not in st.session_state:
 # ==========================================
 st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-# 1. 最上方：【日曆導航列 (強制同一行並設定金色按鈕)】
+# 1. 最上方：【日曆播報器與日期切換 (金色按鈕)】
 cur_date = st.session_state["selected_date"]
 orders_df = get_orders_by_date(str(cur_date))
 
-# 自訂金色按鈕的 CSS 覆蓋這三顆按鈕
-st.markdown("""
-<style>
-    /* 將指定的三顆導航按鈕背景改為金色 #d4af37，文字黑色或深色以保持清晰 */
-    div.row-widget.stButton > button[key*="nav_"] {
-        background-color: #d4af37 !important;
-        color: #222222 !important;
-        font-weight: bold !important;
-    }
-    div.row-widget.stButton > button[key*="nav_"]:hover {
-        background-color: #b89728 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# 自訂金色按鈕的 inline CSS 樣式
+gold_btn_style = (
+    "background-color: #D4AF37 !important; color: #FFFFFF !important;"
+    " font-weight: bold !important; border-radius: 8px !important; border:"
+    " none !important;"
+)
 
-# 讓前一天、日期選擇、後一天、回到今天排在同一行
 col_prev, col_date_picker, col_next, col_today = st.columns([1, 1.8, 1, 1])
 
 with col_prev:
-  st.write("")  # 垂直微調對齊日期輸入框
-  st.write("")
-  if st.button("◀ 前一天", key="nav_prev", use_container_width=True):
+  st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+  if st.button(
+      "◀ 前一天", use_container_width=True, key="btn_prev_date"
+  ):
     st.session_state["selected_date"] = cur_date - timedelta(days=1)
     st.rerun()
 
 with col_date_picker:
   selected_date_input = st.date_input(
-      "選擇日期", value=cur_date, label_visibility="collapsed"
+      "選擇日期", value=cur_date, label_visibility="visible"
   )
   if selected_date_input != cur_date:
     st.session_state["selected_date"] = selected_date_input
     st.rerun()
 
 with col_next:
-  st.write("")
-  st.write("")
-  if st.button("後一天 ▶", key="nav_next", use_container_width=True):
+  st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+  if st.button("後一天 ▶", use_container_width=True, key="btn_next_date"):
     st.session_state["selected_date"] = cur_date + timedelta(days=1)
     st.rerun()
 
 with col_today:
-  st.write("")
-  st.write("")
-  if st.button("🏠 回到今天", key="nav_today", use_container_width=True):
+  st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+  if st.button("🏠 回到今天", use_container_width=True, key="btn_today_date"):
     st.session_state["selected_date"] = datetime.now().date()
     st.rerun()
+
+# 強制將這三顆日曆按鈕套用金色樣式
+st.markdown(f"""
+<style>
+    button[key*="btn_prev_date"], button[key*="btn_next_date"], button[key*="btn_today_date"] {{
+        {gold_btn_style}
+    }}
+</style>
+""", unsafe_allow_html=True)
 
 # 統計當日口味需求
 flavor_summary_dict = {}
@@ -317,6 +316,7 @@ with st.container():
         key=f"input_phone_{f_key}",
     )
 
+  # 品項與口味編輯彈跳按鈕同一行
   c_lbl, c_btn = st.columns([3, 1])
   with c_lbl:
     st.markdown("##### 🛒 訂購品項")
@@ -372,12 +372,10 @@ with st.container():
     )
     selected_items_list.append(f"{f_sel} x {q_sel}")
 
-  c_add_btn, c_reset_btn, _ = st.columns([1, 1, 2])
+  # 僅保留「增加一個口味」按鈕，移除重置按鈕
+  c_add_btn, _ = st.columns([1, 2])
   if c_add_btn.button("➕ 增加一個口味"):
     st.session_state.item_count += 1
-    st.rerun()
-  if c_reset_btn.button("🔄 重置品項"):
-    st.session_state.item_count = 1
     st.rerun()
 
   items_combined_str = ", ".join(selected_items_list)
