@@ -89,7 +89,6 @@ def init_db():
             created_at TEXT
         )
     """)
-  # 檢查 flavors 表是否有 sort_order 欄位，沒有則自動補上
   c.execute("""
         CREATE TABLE IF NOT EXISTS flavors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,24 +103,35 @@ def init_db():
 
   c.execute("SELECT COUNT(*) FROM flavors")
   if c.fetchone()[0] == 0:
+    # 根據您上傳的 MENU 最新菜單品項
     default_flavors = [
-        "純紅豆餡大福",
-        "純綠豆餡大福",
-        "純芋頭餡大福",
-        "芋見奶凍大福",
-        "法式奶酥包種茶大福",
-        "台灣包種茶大福",
-        "法式奶酥紅豆大福",
-        "抹茶乳酪紅豆大福",
-        "可可乳酪大福",
-        "重乳酪紅豆大福",
-        "綠葡萄奶酥大福",
-        "奶油綠豆桔大福",
-        "招牌紅豆桔大福",
+        # 季節限定口味
+        "綠桔雙拼水果大福",
         "法式奶酥桔大福",
-        "芋見金沙大福",
-        "綜合豆系列大福",
-        "綜合乳酪大福",
+        "奶油綠豆桔大福",
+        "紅豆桔大福",
+        "綠葡萄法式奶酥大福",
+        "綠葡萄奶油綠豆大福",
+        "法式奶酥柿大福",
+        "台灣包種柿大福",
+        "靜岡抹茶柿大福",
+        "奶油綠豆柿大福",
+        "紅豆柿大福",
+        "水果雙拼茶韻大福",
+        # 常態口味
+        "乳酪綜合大福",
+        "芋頭奶凍大福",
+        "法式奶酥紅豆大福",
+        "法式奶酥抹茶大福",
+        "台灣包種茶大福",
+        "法式奶酥包種茶大福",
+        "豆綜合大福",
+        "豆大福紅豆",
+        "奶油綠豆大福",
+        "芋頭豆大福",
+        "重乳酪紅豆大福",
+        "抹茶紅豆乳酪大福",
+        "可可乳酪大福",
     ]
     for idx, f in enumerate(default_flavors):
       c.execute(
@@ -177,11 +187,9 @@ def move_flavor_order(flavor_id, direction):
   df = get_flavor_records()
   records = df.to_dict("records")
 
-  # 找到當前 index
   idx = next((i for i, r in enumerate(records) if r["id"] == flavor_id), None)
   if idx is not None:
     if direction == "up" and idx > 0:
-      # 交換 sort_order
       target_idx = idx - 1
     elif direction == "down" and idx < len(records) - 1:
       target_idx = idx + 1
@@ -189,11 +197,9 @@ def move_flavor_order(flavor_id, direction):
       conn.close()
       return
 
-    # 交換兩者的 sort_order
     id1, order1 = records[idx]["id"], records[idx]["sort_order"]
     id2, order2 = records[target_idx]["id"], records[target_idx]["sort_order"]
 
-    # 如果剛好 sort_order 相同，重新賦值全部順序
     if order1 == order2:
       for i, r in enumerate(records):
         c.execute(
@@ -305,13 +311,14 @@ st.sidebar.title("🍡 紅斗泥管理選單")
 app_mode = st.sidebar.radio("選擇功能頁面", ["📋 訂單與取貨主頁", "⚙️ 編輯口味清單"])
 
 # ==========================================
-# 頁面一：編輯口味清單 (獨立頁面：可新增、修改名稱、調整順序、刪除)
+# 頁面一：編輯口味清單
 # ==========================================
 if app_mode == "⚙️ 編輯口味清單":
   st.title("⚙️ 編輯與管理下拉選單口味")
-  st.write("在這裡您可以新增口味、修改名稱，或是透過上下按鈕調整順序：")
+  st.write(
+      "在這裡您可以新增口味、修改名稱，或是透過上下按鈕調整菜單顯示順序："
+  )
 
-  # 新增口味區
   with st.container():
     new_flavor_input = st.text_input("輸入新口味名稱")
     if st.button("➕ 新增口味"):
@@ -319,7 +326,6 @@ if app_mode == "⚙️ 編輯口味清單":
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         try:
-          # 取得目前最大的 sort_order
           c.execute("SELECT MAX(sort_order) FROM flavors")
           max_order = c.fetchone()[0]
           next_order = 0 if max_order is None else max_order + 1
@@ -393,7 +399,6 @@ if app_mode == "⚙️ 編輯口味清單":
 elif app_mode == "📋 訂單與取貨主頁":
   st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-  # 1. 最上方：【日曆播報器與日期切換】同一列排版
   cur_date = st.session_state["selected_date"]
   orders_df = get_orders_by_date(str(cur_date))
 
@@ -444,7 +449,6 @@ elif app_mode == "📋 訂單與取貨主頁":
       "、".join(summary_str_list) if summary_str_list else "目前尚無訂單"
   )
 
-  # 置頂播報器
   st.info(
       f"📢 **【{cur_date} 每日播報摘要】** 共 **{total_orders_count}** 筆訂單"
       f" ｜ 總計需備貨：**{summary_text_joined}**"
