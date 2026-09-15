@@ -22,13 +22,14 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* 一般按鈕樣式: 背景 #946660, 字體白色 */
+    /* 按鈕樣式: 背景 #946660, 字體白色 */
     div.stButton > button, div.stFormSubmitButton > button {
         background-color: #946660 !important;
         color: #ffffff !important;
         border: none !important;
         border-radius: 8px !important;
         font-weight: bold !important;
+        width: 100%;
     }
     div.stButton > button:hover, div.stFormSubmitButton > button:hover {
         background-color: #7d544f !important;
@@ -45,17 +46,16 @@ st.markdown("""
         color: #000000 !important;
     }
 
-    /* 彈跳視窗 (Popover 內部) 文字與輸入框強制改為黑色，確保清晰可見 */
+    /* 彈跳視窗 (Popover 內部文字改為黑色，確保看得到) */
     div[data-testid="stPopoverBody"] label, 
     div[data-testid="stPopoverBody"] p, 
-    div[data-testid="stPopoverBody"] h3, 
-    div[data-testid="stPopoverBody"] span,
-    div[data-testid="stPopoverBody"] div {
+    div[data-testid="stPopoverBody"] span, 
+    div[data-testid="stPopoverBody"] h3 {
         color: #000000 !important;
     }
-    div[data-testid="stPopoverBody"] input {
-        color: #000000 !important;
-        background-color: #ffffff !important;
+    div[data-testid="stPopoverBody"] {
+        background-color: #fcf8f7 !important;
+        border-radius: 12px;
     }
 
     /* 容器與卡片微調 */
@@ -208,9 +208,6 @@ def update_order_full(
 if "selected_date" not in st.session_state:
   st.session_state["selected_date"] = datetime.now().date()
 
-if "new_order_date" not in st.session_state:
-  st.session_state["new_order_date"] = datetime.now().date()
-
 if "item_count" not in st.session_state:
   st.session_state["item_count"] = 1
 
@@ -222,28 +219,15 @@ if "form_reset_counter" not in st.session_state:
 # ==========================================
 st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
 
-# 1. 最上方：【日曆播報器與日期切換（同一列佈局，金色按鈕）】
+# 1. 最上方：【日曆播報器與日期切換】同一列排版
 cur_date = st.session_state["selected_date"]
 orders_df = get_orders_by_date(str(cur_date))
 
-# 自訂金色按鈕的 CSS 覆蓋
-st.markdown("""
-<style>
-    /* 將前一天、後一天、回到今天按鈕改成金色 #c59b27 */
-    div.stButton > button[kind="secondary"] {
-        background-color: #c59b27 !important;
-    }
-    div.stButton > button[kind="secondary"]:hover {
-        background-color: #a88220 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 col_prev, col_date_picker, col_next, col_today = st.columns(
-    [1.1, 2.2, 1.1, 1.1]
+    [1.2, 1.8, 1.2, 1.2]
 )
 with col_prev:
-  if st.button("◀ 前一天", use_container_width=True, key="btn_prev"):
+  if st.button("◀ 前一天", use_container_width=True):
     st.session_state["selected_date"] = cur_date - timedelta(days=1)
     st.rerun()
 with col_date_picker:
@@ -254,11 +238,11 @@ with col_date_picker:
     st.session_state["selected_date"] = selected_date_input
     st.rerun()
 with col_next:
-  if st.button("後一天 ▶", use_container_width=True, key="btn_next"):
+  if st.button("後一天 ▶", use_container_width=True):
     st.session_state["selected_date"] = cur_date + timedelta(days=1)
     st.rerun()
 with col_today:
-  if st.button("🏠 回到今天", use_container_width=True, key="btn_today"):
+  if st.button("🏠 今天", use_container_width=True):
     st.session_state["selected_date"] = datetime.now().date()
     st.rerun()
 
@@ -319,11 +303,11 @@ with st.container():
   with c_lbl:
     st.markdown("##### 🛒 訂購品項")
   with c_btn:
-    with st.popover("⚙️ 新增/編輯口味"):
+    with st.popover("⚙️ 編輯口味"):
       st.markdown("### 管理下拉選單口味")
       flavors_list = get_flavors()
       new_flavor_input = st.text_input("新口味名稱", key="new_flav_input")
-      if st.button("➕ 新增口味", key="add_flav_btn"):
+      if st.button("➕ 新增口味"):
         if new_flavor_input.strip():
           conn = sqlite3.connect(DB_FILE)
           c = conn.cursor()
@@ -342,7 +326,7 @@ with st.container():
       st.markdown("現有口味列表：")
       for f in flavors_list:
         fc1, fc2 = st.columns([3, 1])
-        fc1.text(f)
+        fc1.markdown(f"<span style='color:black;'>{f}</span>", unsafe_allow_html=True)
         if fc2.button("🗑️", key=f"del_flav_{f}"):
           conn = sqlite3.connect(DB_FILE)
           c = conn.cursor()
@@ -370,8 +354,7 @@ with st.container():
     )
     selected_items_list.append(f"{f_sel} x {q_sel}")
 
-  c_add_btn, _ = st.columns([1, 3])
-  if c_add_btn.button("➕ 增加一個口味", key="btn_add_flavor_row"):
+  if st.button("➕ 增加一個口味"):
     st.session_state.item_count += 1
     st.rerun()
 
@@ -389,7 +372,7 @@ with st.container():
   with col_date_col:
     pickup_date = st.date_input(
         "預定取貨日期",
-        value=st.session_state["new_order_date"],
+        value=cur_date,
         key=f"date_new_{f_key}",
     )
 
