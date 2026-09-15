@@ -37,7 +37,7 @@ def init_db():
             flavor_name TEXT UNIQUE
         )
     """)
-  # 預設口味資料 (如果是空的就加入預設)
+  # 預設口味資料
   c.execute("SELECT COUNT(*) FROM flavors")
   if c.fetchone()[0] == 0:
     default_flavors = [
@@ -250,7 +250,6 @@ flavor_summary_dict = {}
 total_orders_count = len(orders_df)
 for _, row in orders_df.iterrows():
   items_text = row["items"]
-  # 假設格式如: "法式奶酥 x 2, 草莓大福 x 1"
   parts = items_text.split(",")
   for p in parts:
     p = p.strip()
@@ -286,69 +285,56 @@ left_col, right_col = st.columns([1.2, 1.8], gap="large")
 with left_col:
   st.subheader("➕ 快速新增訂單")
 
-  with st.form("new_order_form", clear_submit=True):
-    name = st.text_input("客戶姓名 / 稱呼 *", placeholder="例：陳小美")
-    phone = st.text_input("聯絡電話 (選填)", placeholder="例：0912-345-678")
+  name = st.text_input("客戶姓名 / 稱呼 *", placeholder="例：陳小美")
+  phone = st.text_input("聯絡電話 (選填)", placeholder="例：0912-345-678")
 
-    st.markdown("##### 🛒 訂購內容（可新增多種口味）")
+  st.markdown("##### 🛒 訂購內容（可新增多種口味）")
 
-    # 使用 session_state 來動態管理品項列
-    if "item_rows" not in st.session_state:
-      st.session_state.item_rows = [0]
+  flavor_options = get_flavors()
+  num_rows = st.number_input(
+      "品項種類數量",
+      min_value=1,
+      max_value=10,
+      value=1,
+      help="如果客人口味買 1 種就填 1，買 2 種就填 2",
+  )
 
-    # 動態產生品項選擇列
-    item_tuples = []
-    # 這裡我們用 Streamlit 欄位動態產生
-    flavor_options = get_flavors()
-
-    num_rows = st.number_input(
-        "品項種類數量",
-        min_value=1,
-        max_value=10,
-        value=1,
-        help="如果客人口味買 1 種就填 1，買 2 種就填 2",
+  selected_items_list = []
+  for i in range(num_rows):
+    c_f, c_q = st.columns([2, 1])
+    f_sel = c_f.selectbox(f"口味 #{i+1}", flavor_options, key=f"f_{i}")
+    q_sel = c_q.number_input(
+        f"數量 #{i+1}", min_value=1, max_value=50, value=1, key=f"q_{i}"
     )
+    selected_items_list.append(f"{f_sel} x {q_sel}")
 
-    selected_items_list = []
-    for i in range(num_rows):
-      c_f, c_q = st.columns([2, 1])
-      f_sel = c_f.selectbox(f"口味 #{i+1}", flavor_options, key=f"f_{i}")
-      q_sel = c_q.number_input(
-          f"數量 #{i+1}", min_value=1, max_value=50, value=1, key=f"q_{i}"
+  items_combined_str = ", ".join(selected_items_list)
+
+  col_pay, col_date = st.columns(2)
+  with col_pay:
+    payment = st.radio("付款方式", ["已匯款", "現場付"], horizontal=True)
+
+  with col_date:
+    pickup_date = st.date_input("預定取貨日期", value=cur_date)
+
+  time_slot = st.radio("取貨時段", ["中午", "下午", "無指定"], horizontal=True)
+  note = st.text_area("備註 (選填)", placeholder="例：要保冷袋、不要附餐具")
+
+  if st.button("✅ 送出並建立訂單", use_container_width=True):
+    if not name.strip():
+      st.error("請輸入客戶姓名！")
+    else:
+      add_order(
+          name,
+          items_combined_str,
+          payment,
+          pickup_date,
+          time_slot,
+          phone,
+          note,
       )
-      selected_items_list.append(f"{f_sel} x {q_sel}")
-
-    items_combined_str = ", ".join(selected_items_list)
-
-    col_pay, col_date = st.columns(2)
-    with col_pay:
-      payment = st.radio("付款方式", ["已匯款", "現場付"], horizontal=True)
-
-    with col_date:
-      pickup_date = st.date_input("預定取貨日期", value=cur_date)
-
-    time_slot = st.radio(
-        "取貨時段", ["中午", "下午", "無指定"], horizontal=True
-    )
-    note = st.text_area("備註 (選填)", placeholder="例：要保冷袋、不要附餐具")
-
-    submitted = st.form_submit_button("✅ 送出並建立訂單", use_container_width=True)
-
-    if submitted:
-      if not name.strip():
-        st.error("請輸入客戶姓名！")
-      else:
-        add_order(
-            name,
-            items_combined_str,
-            payment,
-            pickup_date,
-            time_slot,
-            phone,
-            note,
-        )
-        st.success(f"已成功新增 {name} 的訂單！")
-        st.rerun()
+      st.success(f"已成功新增 {name} 的訂單！")
+      st.rerun()
 
 with right_col:
   st.subheader(f"📋 【{cur_date}】取貨與出貨一覽表")
@@ -360,9 +346,8 @@ with right_col:
       order_id = row["id"]
       is_shipped = bool(row["shipped"])
 
-      # 每一筆訂單用 expander 或 card 呈現
       with st.expander(
-          f"{'✅ [已出貨]' if is_shipped else '⏳ [未出貨]'} {row['time_slot']}｜"
+          f"{'✅ [已出貨]' if is_shipped else '⏳ [未出貨]'} {row['pickup_time_slot']}｜"
           f" {row['name']} ｜ {row['items']}  ({row['payment']})",
           expanded=not is_shipped,
       ):
@@ -376,7 +361,6 @@ with right_col:
           st.write(f"**取貨時段：** {row['pickup_time_slot']}")
           st.write(f"**備註：** {row['note'] if row['note'] else '無'}")
         with c3:
-          # 已出貨勾選框
           shipped_toggle = st.checkbox(
               "已出貨", value=is_shipped, key=f"ship_{order_id}"
           )
@@ -384,15 +368,12 @@ with right_col:
             update_order_shipped(order_id, shipped_toggle)
             st.rerun()
 
-          # 刪除按鈕
           if st.button("🗑️ 刪除訂單", key=f"del_{order_id}"):
             delete_order(order_id)
             st.rerun()
 
-        # 編輯區 (用一個小 expander 展開修改)
         with st.popover("✏️ 編輯此訂單"):
-          with st.form(key=f"edit_form_{order_id}"
-          ):  # 注意 form key 必須唯一
+          with st.form(key=f"edit_form_{order_id}"):
             e_name = st.text_input("客戶姓名", value=row["name"])
             e_phone = st.text_input(
                 "聯絡電話", value=row["phone"] if row["phone"] else ""
