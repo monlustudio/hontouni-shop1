@@ -149,290 +149,267 @@ def update_order_full(
 if "selected_date" not in st.session_state:
   st.session_state["selected_date"] = datetime.now().date()
 
-# --- 頂部導覽分頁 (第一層選單) ---
-tab_main, tab_settings = st.tabs(["📋 訂單與記帳主頁", "⚙️ 系統設定與口味管理"])
+# ==========================================
+# 主畫面區
+# ==========================================
+st.title("🍡 紅斗泥大福 — 取貨與訂單管理系統")
+
+# 1. 最上方：【日曆播報器與日期切換】
+cur_date = st.session_state["selected_date"]
+orders_df = get_orders_by_date(str(cur_date))
+
+col_prev, col_date_picker, col_next, col_today = st.columns([1, 2, 1, 1])
+with col_prev:
+  if st.button("◀ 前一天", use_container_width=True):
+    st.session_state["selected_date"] = cur_date - timedelta(days=1)
+    st.rerun()
+with col_date_picker:
+  selected_date_input = st.date_input(
+      "選擇日期", value=cur_date, label_visibility="collapsed"
+  )
+  if selected_date_input != cur_date:
+    st.session_state["selected_date"] = selected_date_input
+    st.rerun()
+with col_next:
+  if st.button("後一天 ▶", use_container_width=True):
+    st.session_state["selected_date"] = cur_date + timedelta(days=1)
+    st.rerun()
+with col_today:
+  if st.button("🏠 回到今天", use_container_width=True):
+    st.session_state["selected_date"] = datetime.now().date()
+    st.rerun()
+
+# 統計當日口味需求
+flavor_summary_dict = {}
+total_orders_count = len(orders_df)
+for _, row in orders_df.iterrows():
+  items_text = row["items"]
+  parts = items_text.split(",")
+  for p in parts:
+    p = p.strip()
+    if "x" in p:
+      sub_parts = p.split("x")
+      f_name = sub_parts[0].strip()
+      try:
+        f_qty = int(sub_parts[1].strip())
+      except:
+        f_qty = 1
+      flavor_summary_dict[f_name] = flavor_summary_dict.get(f_name, 0) + f_qty
+
+summary_str_list = [f"{k} × {v}" for k, v in flavor_summary_dict.items()]
+summary_text_joined = (
+    "、".join(summary_str_list) if summary_str_list else "目前尚無訂單"
+)
+
+# 置頂播報器
+st.info(
+    f"📢 **【{cur_date} 每日播報摘要】** 共 **{total_orders_count}** 筆訂單"
+    f" ｜ 總計需備貨：**{summary_text_joined}**"
+)
+
+st.divider()
 
 # ==========================================
-# 分頁一：訂單與記帳主頁
+# 2. 上半部：快速新增訂單
 # ==========================================
-with tab_main:
-  # 1. 最上方：【日曆播報器與日期切換】
-  cur_date = st.session_state["selected_date"]
-  orders_df = get_orders_by_date(str(cur_date))
+st.subheader("➕ 快速新增訂單")
 
-  col_prev, col_date_picker, col_next, col_today = st.columns([1, 2, 1, 1])
-  with col_prev:
-    if st.button("◀ 前一天", use_container_width=True):
-      st.session_state["selected_date"] = cur_date - timedelta(days=1)
-      st.rerun()
-  with col_date_picker:
-    selected_date_input = st.date_input(
-        "選擇日期", value=cur_date, label_visibility="collapsed"
-    )
-    if selected_date_input != cur_date:
-      st.session_state["selected_date"] = selected_date_input
-      st.rerun()
-  with col_next:
-    if st.button("後一天 ▶", use_container_width=True):
-      st.session_state["selected_date"] = cur_date + timedelta(days=1)
-      st.rerun()
-  with col_today:
-    if st.button("🏠 回到今天", use_container_width=True):
-      st.session_state["selected_date"] = datetime.now().date()
-      st.rerun()
-
-  # 統計當日口味需求
-  flavor_summary_dict = {}
-  total_orders_count = len(orders_df)
-  for _, row in orders_df.iterrows():
-    items_text = row["items"]
-    parts = items_text.split(",")
-    for p in parts:
-      p = p.strip()
-      if "x" in p:
-        sub_parts = p.split("x")
-        f_name = sub_parts[0].strip()
-        try:
-          f_qty = int(sub_parts[1].strip())
-        except:
-          f_qty = 1
-        flavor_summary_dict[f_name] = (
-            flavor_summary_dict.get(f_name, 0) + f_qty
-        )
-
-  summary_str_list = [f"{k} × {v}" for k, v in flavor_summary_dict.items()]
-  summary_text_joined = (
-      "、".join(summary_str_list) if summary_str_list else "目前尚無訂單"
-  )
-
-  # 置頂播報器
-  st.info(
-      f"📢 **【{cur_date} 每日播報摘要】** 共 **{total_orders_count}** 筆訂單"
-      f" ｜ 總計需備貨：**{summary_text_joined}**"
-  )
-
-  st.divider()
-
-  # 2. 左右雙欄：左側快速新增 / 右側單行訂單清單
-  left_col, right_col = st.columns([1.2, 1.8], gap="large")
-
-  with left_col:
-    st.subheader("➕ 快速新增訂單")
-
+with st.container(border=True):
+  col_n1, col_n2 = st.columns(2)
+  with col_n1:
     name = st.text_input("客戶姓名 / 稱呼 *", placeholder="例：陳小美")
+  with col_n2:
     phone = st.text_input("聯絡電話 (選填)", placeholder="例：0912-345-678")
 
+  # 品項與口味編輯彈跳按鈕同一行
+  c_lbl, c_btn = st.columns([3, 1])
+  with c_lbl:
     st.markdown("##### 🛒 訂購品項")
-    flavor_options = get_flavors()
+  with c_btn:
+    # 彈跳視窗管理口味
+    with st.popover("⚙️ 新增/編輯口味"):
+      st.write("### 管理下拉選單口味")
+      flavors_list = get_flavors()
+      new_flavor_input = st.text_input("新口味名稱")
+      if st.button("➕ 新增口味"):
+        if new_flavor_input.strip():
+          conn = sqlite3.connect(DB_FILE)
+          c = conn.cursor()
+          try:
+            c.execute(
+                "INSERT INTO flavors (flavor_name) VALUES (?)",
+                (new_flavor_input.strip(),),
+            )
+            conn.commit()
+            st.success(f"已新增：{new_flavor_input}")
+            st.rerun()
+          except:
+            st.warning("該口味已存在！")
+          conn.close()
 
-    # 使用 session_state 來動態控制品項列數（按按鈕才增加）
-    if "item_count" not in st.session_state:
-      st.session_state.item_count = 1
+      st.write("現有口味列表：")
+      for f in flavors_list:
+        fc1, fc2 = st.columns([3, 1])
+        fc1.text(f)
+        if fc2.button("🗑️", key=f"del_flav_{f}"):
+          conn = sqlite3.connect(DB_FILE)
+          c = conn.cursor()
+          c.execute("DELETE FROM flavors WHERE flavor_name = ?", (f,))
+          conn.commit()
+          conn.close()
+          st.rerun()
 
-    selected_items_list = []
-    for i in range(st.session_state.item_count):
-      c_f, c_q, c_del = st.columns([2.5, 1, 0.6])
-      f_sel = c_f.selectbox(f"口味 #{i+1}", flavor_options, key=f"f_new_{i}")
-      q_sel = c_q.number_input(
-          f"數量 #{i+1}", min_value=1, max_value=50, value=1, key=f"q_new_{i}"
-      )
-      selected_items_list.append(f"{f_sel} x {q_sel}")
+  flavor_options = get_flavors()
 
-    c_add_btn, c_reset_btn = st.columns(2)
-    if c_add_btn.button("➕ 增加一個口味"):
-      st.session_state.item_count += 1
-      st.rerun()
-    if c_reset_btn.button("🔄 重置品項"):
-      st.session_state.item_count = 1
-      st.rerun()
+  if "item_count" not in st.session_state:
+    st.session_state.item_count = 1
 
-    items_combined_str = ", ".join(selected_items_list)
+  selected_items_list = []
+  for i in range(st.session_state.item_count):
+    c_f, c_q, _ = st.columns([2.5, 1, 0.5])
+    f_sel = c_f.selectbox(f"口味 #{i+1}", flavor_options, key=f"f_new_{i}")
+    q_sel = c_q.number_input(
+        f"數量 #{i+1}", min_value=1, max_value=50, value=1, key=f"q_new_{i}"
+    )
+    selected_items_list.append(f"{f_sel} x {q_sel}")
 
-    col_pay, col_date = st.columns(2)
-    with col_pay:
-      payment = st.radio(
-          "付款方式", ["已匯款", "現場付"], horizontal=True, key="pay_new"
-      )
-    with col_date:
-      pickup_date = st.date_input(
-          "預定取貨日期", value=cur_date, key="date_new"
-      )
+  c_add_btn, c_reset_btn, _ = st.columns([1, 1, 2])
+  if c_add_btn.button("➕ 增加一個口味"):
+    st.session_state.item_count += 1
+    st.rerun()
+  if c_reset_btn.button("🔄 重置品項"):
+    st.session_state.item_count = 1
+    st.rerun()
 
+  items_combined_str = ", ".join(selected_items_list)
+
+  col_pay, col_date, col_slot = st.columns(3)
+  with col_pay:
+    payment = st.radio(
+        "付款方式", ["已匯款", "現場付"], horizontal=True, key="pay_new"
+    )
+  with col_date:
+    # 預設為當前選擇的日期
+    pickup_date = st.date_input(
+        "預定取貨日期", value=cur_date, key="date_new"
+    )
+  with col_slot:
     time_slot = st.radio(
         "取貨時段",
         ["中午", "下午", "無指定"],
         horizontal=True,
         key="slot_new",
     )
-    note = st.text_input("備註 (選填)", placeholder="例：要保冷袋")
 
-    if st.button("✅ 儲存送出訂單", use_container_width=True, type="primary"):
-      if not name.strip():
-        st.error("請輸入客戶姓名！")
-      else:
-        add_order(
-            name,
-            items_combined_str,
-            payment,
-            pickup_date,
-            time_slot,
-            phone,
-            note,
-        )
-        st.session_state.item_count = 1  # 重置
-        st.success(f"已成功新增 {name} 的訂單！")
-        st.rerun()
+  note = st.text_input("備註 (選填)", placeholder="例：要保冷袋")
 
-  with right_col:
-    st.subheader(f"📋 【{cur_date}】取貨清單")
-
-    if orders_df.empty:
-      st.warning("這天目前沒有訂單紀錄。")
+  if st.button("✅ 儲存送出訂單", use_container_width=True, type="primary"):
+    if not name.strip():
+      st.error("請輸入客戶姓名！")
     else:
-      for idx, row in orders_df.iterrows():
-        order_id = row["id"]
-        is_shipped = bool(row["shipped"])
-
-        # 每筆訂單設計成簡潔的水平一行風格卡片
-        with st.container(border=True):
-          rc1, rc2, rc3, rc4 = st.columns([1.2, 2.2, 1.5, 1])
-
-          with rc1:
-            # 狀態與時間
-            st.markdown(
-                f"**{'✅ 已出貨' if is_shipped else '⏳ 未出貨'}**<br>`{row['pickup_time_slot']}`",
-                unsafe_allow_html=True,
-            )
-
-          with rc2:
-            # 姓名與品項
-            st.markdown(
-                f"**{row['name']}** ({row['payment']})<br><span"
-                f" style='color: #666;'>{row['items']}</span>",
-                unsafe_allow_html=True,
-            )
-
-          with rc3:
-            # 電話與備註
-            phone_txt = row["phone"] if row["phone"] else "無電話"
-            note_txt = f" / 備註: {row['note']}" if row["note"] else ""
-            st.markdown(
-                f"<small>{phone_txt}{note_txt}</small>", unsafe_allow_html=True
-            )
-
-          with rc4:
-            # 快捷操作
-            shipped_toggle = st.checkbox(
-                "已出貨", value=is_shipped, key=f"ship_{order_id}"
-            )
-            if shipped_toggle != is_shipped:
-              update_order_shipped(order_id, shipped_toggle)
-              st.rerun()
-
-          # 展開編輯與刪除
-          with st.expander("⚙️ 編輯 / 刪除訂單"):
-            with st.form(key=f"edit_form_{order_id}"):
-              e_name = st.text_input("客戶姓名", value=row["name"])
-              e_phone = st.text_input(
-                  "聯絡電話", value=row["phone"] if row["phone"] else ""
-              )
-              e_items = st.text_input(
-                  "訂購品項 (例: 水蜜桃大福 x 2)", value=row["items"]
-              )
-              e_payment = st.radio(
-                  "付款方式",
-                  ["已匯款", "現場付"],
-                  index=0 if row["payment"] == "已匯款" else 1,
-                  horizontal=True,
-              )
-              e_date = st.date_input(
-                  "預定取貨日期",
-                  value=datetime.strptime(row["pickup_date"], "%Y-%m-%d").date(),
-              )
-              e_slot = st.radio(
-                  "取貨時段",
-                  ["中午", "下午", "無指定"],
-                  index=["中午", "下午", "無指定"].index(row["pickup_time_slot"])
-                  if row["pickup_time_slot"] in ["中午", "下午", "無指定"]
-                  else 2,
-                  horizontal=True,
-              )
-              e_note = st.text_area(
-                  "備註", value=row["note"] if row["note"] else ""
-              )
-
-              col_save, col_del = st.columns(2)
-              if col_save.form_submit_button("💾 儲存修改"):
-                update_order_full(
-                    order_id,
-                    e_name,
-                    e_items,
-                    e_payment,
-                    e_date,
-                    e_slot,
-                    e_phone,
-                    e_note,
-                )
-                st.success("已更新！")
-                st.rerun()
-
-            if st.button("🗑️ 刪除此筆訂單", key=f"del_{order_id}"):
-              delete_order(order_id)
-              st.rerun()
-
-
-# ==========================================
-# 分頁二：系統設定與口味管理
-# ==========================================
-with tab_settings:
-  st.header("⚙️ 系統設定與口味管理")
-  st.write("在這裡可以新增或刪除前台下拉選單出現的口味選項，以及備份資料。")
-
-  col_set1, col_set2 = st.columns(2)
-
-  with col_set1:
-    st.subheader("🍡 下拉選單口味設定")
-    flavors_list = get_flavors()
-
-    new_flavor = st.text_input("新增口味名稱 (例如: 芋頭鹹蛋黃大福)")
-    if st.button("➕ 新增到選單"):
-      if new_flavor.strip():
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        try:
-          c.execute(
-              "INSERT INTO flavors (flavor_name) VALUES (?)",
-              (new_flavor.strip(),),
-          )
-          conn.commit()
-          st.success(f"成功新增口味：{new_flavor}")
-          st.rerun()
-        except:
-          st.warning("該口味已經存在選單中了！")
-        conn.close()
-
-    st.write("目前現有口味列表：")
-    for f in flavors_list:
-      fc1, fc2 = st.columns([3, 1])
-      fc1.text(f)
-      if fc2.button("🗑️ 刪除", key=f"del_flav_{f}"):
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        c.execute("DELETE FROM flavors WHERE flavor_name = ?", (f,))
-        conn.commit()
-        conn.close()
-        st.rerun()
-
-  with col_set2:
-    st.subheader("📊 資料備份與匯出")
-    st.write("您可以隨時下載完整的訂單資料（CSV 格式）存檔備用：")
-    if st.button("📥 下載完整訂單資料 (CSV)"):
-      conn = sqlite3.connect(DB_FILE)
-      df_all = pd.read_sql("SELECT * FROM orders", conn)
-      conn.close()
-      st.download_button(
-          "點此下載 CSV 檔案",
-          df_all.to_csv(index=False).encode("utf-8-sig"),
-          file_name=f"hongduni_orders_{datetime.now().strftime('%Y%m%d')}.csv",
-          mime="text/csv",
+      add_order(
+          name,
+          items_combined_str,
+          payment,
+          pickup_date,
+          time_slot,
+          phone,
+          note,
       )
+      st.session_state.item_count = 1  # 重置
+      st.success(f"已成功新增 {name} 的訂單！")
+      st.rerun()
+
+st.divider()
+
+# ==========================================
+# 3. 下半部：取貨清單管理
+# ==========================================
+st.subheader(f"📋 【{cur_date}】取貨與出貨清單")
+
+if orders_df.empty:
+  st.warning("這天目前沒有訂單紀錄。")
+else:
+  for idx, row in orders_df.iterrows():
+    order_id = row["id"]
+    is_shipped = bool(row["shipped"])
+
+    with st.container(border=True):
+      rc1, rc2, rc3, rc4 = st.columns([1.2, 2.5, 1.5, 1])
+
+      with rc1:
+        st.markdown(
+            f"**{'✅ 已出貨' if is_shipped else '⏳ 未出貨'}**<br>`{row['pickup_time_slot']}`",
+            unsafe_allow_html=True,
+        )
+
+      with rc2:
+        st.markdown(
+            f"**{row['name']}** ({row['payment']})<br><span"
+            f" style='color: #666;'>{row['items']}</span>",
+            unsafe_allow_html=True,
+        )
+
+      with rc3:
+        phone_txt = row["phone"] if row["phone"] else "無電話"
+        note_txt = f" / 備註: {row['note']}" if row["note"] else ""
+        st.markdown(
+            f"<small>{phone_txt}{note_txt}</small>", unsafe_allow_html=True
+        )
+
+      with rc4:
+        shipped_toggle = st.checkbox(
+            "已出貨", value=is_shipped, key=f"ship_{order_id}"
+        )
+        if shipped_toggle != is_shipped:
+          update_order_shipped(order_id, shipped_toggle)
+          st.rerun()
+
+      # 展開編輯與刪除
+      with st.expander("⚙️ 編輯 / 刪除訂單"):
+        with st.form(key=f"edit_form_{order_id}"):
+          e_name = st.text_input("客戶姓名", value=row["name"])
+          e_phone = st.text_input(
+              "聯絡電話", value=row["phone"] if row["phone"] else ""
+          )
+          e_items = st.text_input(
+              "訂購品項 (例: 水蜜桃大福 x 2)", value=row["items"]
+          )
+          e_payment = st.radio(
+              "付款方式",
+              ["已匯款", "現場付"],
+              index=0 if row["payment"] == "已匯款" else 1,
+              horizontal=True,
+          )
+          e_date = st.date_input(
+              "預定取貨日期",
+              value=datetime.strptime(row["pickup_date"], "%Y-%m-%d").date(),
+          )
+          e_slot = st.radio(
+              "取貨時段",
+              ["中午", "下午", "無指定"],
+              index=["中午", "下午", "無指定"].index(row["pickup_time_slot"])
+              if row["pickup_time_slot"] in ["中午", "下午", "無指定"]
+              else 2,
+              horizontal=True,
+          )
+          e_note = st.text_area("備註", value=row["note"] if row["note"] else "")
+
+          col_save, col_del = st.columns(2)
+          if col_save.form_submit_button("💾 儲存修改"):
+            update_order_full(
+                order_id,
+                e_name,
+                e_items,
+                e_payment,
+                e_date,
+                e_slot,
+                e_phone,
+                e_note,
+            )
+            st.success("已更新！")
+            st.rerun()
+
+        if st.button("🗑️ 刪除此筆訂單", key=f"del_{order_id}"):
+          delete_order(order_id)
+          st.rerun()
