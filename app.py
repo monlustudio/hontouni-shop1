@@ -22,7 +22,7 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* 側邊欄 (Sidebar) 背景改為柔和的深色，並將文字改為白色以利閱讀 */
+    /* 側邊欄 (Sidebar) 背景與文字 */
     section[data-testid="stSidebar"] {
         background-color: #7d544f !important;
     }
@@ -97,15 +97,25 @@ def init_db():
     """)
   c.execute("SELECT COUNT(*) FROM flavors")
   if c.fetchone()[0] == 0:
+    # 官網現售口味
     default_flavors = [
-        "法式奶酥",
-        "草莓大福",
-        "水蜜桃大福",
-        "綠葡萄大福",
-        "橘子大福",
-        "包種茶大福",
-        "泰式奶茶大福",
-        "柿子包種茶大福",
+        "純紅豆餡大福",
+        "純綠豆餡大福",
+        "純芋頭餡大福",
+        "芋見奶凍大福",
+        "法式奶酥包種茶大福",
+        "台灣包種茶大福",
+        "法式奶酥紅豆大福",
+        "抹茶乳酪紅豆大福",
+        "可可乳酪大福",
+        "重乳酪紅豆大福",
+        "綠葡萄奶酥大福",
+        "奶油綠豆桔大福",
+        "招牌紅豆桔大福",
+        "法式奶酥桔大福",
+        "芋見金沙大福",
+        "綜合豆系列大福",
+        "綜合乳酪大福",
     ]
     for f in default_flavors:
       c.execute(
@@ -473,7 +483,7 @@ elif app_mode == "📋 訂單與取貨主頁":
                 "聯絡電話", value=row["phone"] if row["phone"] else ""
             )
             e_items = st.text_input(
-                "訂購品項 (例: 水蜜桃大福 x 2)", value=row["items"]
+                "訂購品項 (例: 芋見奶凍大福 x 2)", value=row["items"]
             )
             e_payment = st.radio(
                 "付款方式",
