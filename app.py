@@ -17,8 +17,21 @@ st.markdown("""
         color: #ffffff;
     }
     
-    /* 標題與文字顏色保持白色 */
+    /* 主畫面標題與文字顏色保持白色 */
     h1, h2, h3, h4, h5, h6, p, label, .stMarkdown {
+        color: #ffffff !important;
+    }
+
+    /* 側邊欄 (Sidebar) 背景改為柔和的深色，並將文字改為白色以利閱讀 */
+    section[data-testid="stSidebar"] {
+        background-color: #7d544f !important;
+    }
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] p, 
+    section[data-testid="stSidebar"] label, 
+    section[data-testid="stSidebar"] span {
         color: #ffffff !important;
     }
 
@@ -32,7 +45,7 @@ st.markdown("""
         width: 100%;
     }
     div.stButton > button:hover, div.stFormSubmitButton > button:hover {
-        background-color: #7d544f !important;
+        background-color: #5e3f3b !important;
         color: #ffffff !important;
     }
 
@@ -452,7 +465,7 @@ elif app_mode == "📋 訂單與取貨主頁":
             update_order_shipped(order_id, shipped_toggle)
             st.rerun()
 
-        # 展開編輯與刪除
+        # 編輯與刪除
         with st.expander("⚙️ 編輯 / 刪除訂單"):
           with st.form(key=f"edit_form_{order_id}"):
             e_name = st.text_input("客戶姓名", value=row["name"])
