@@ -8,6 +8,52 @@ st.set_page_config(
     page_title="紅斗泥大福訂單管理系統", page_icon="🍡", layout="wide"
 )
 
+# --- 自訂 CSS 主題樣式 (#cd9e97 背景、#946660 按鈕、白字、下拉選單白底黑字) ---
+st.markdown("""
+<style>
+    /* 全體背景與主色調 */
+    .stApp {
+        background-color: #cd9e97;
+        color: #ffffff;
+    }
+    
+    /* 標題與文字顏色保持白色 */
+    h1, h2, h3, h4, h5, h6, p, label, .stMarkdown {
+        color: #ffffff !important;
+    }
+
+    /* 按鈕樣式: 背景 #946660, 字體白色 */
+    div.stButton > button, div.stFormSubmitButton > button {
+        background-color: #946660 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: bold !important;
+    }
+    div.stButton > button:hover, div.stFormSubmitButton > button:hover {
+        background-color: #7d544f !important;
+        color: #ffffff !important;
+    }
+
+    /* 下拉選單 (Selectbox) 白底黑字 */
+    div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border-radius: 6px !important;
+    }
+    div[data-baseweb="select"] span, div[data-baseweb="select"] input, div[data-baseweb="select"] div {
+        color: #000000 !important;
+    }
+
+    /* 容器與卡片微調 */
+    div.stExpander, div.stContainer {
+        background-color: rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 5px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # --- 資料庫初始化 ---
 DB_FILE = "hongduni_orders.db"
 
@@ -145,9 +191,19 @@ def update_order_full(
   conn.close()
 
 
-# --- 初始化 Session State 日期 ---
+# --- 初始化 Session State ---
 if "selected_date" not in st.session_state:
   st.session_state["selected_date"] = datetime.now().date()
+
+if "new_order_date" not in st.session_state:
+  st.session_state["new_order_date"] = datetime.now().date()
+
+if "item_count" not in st.session_state:
+  st.session_state["item_count"] = 1
+
+# 表單欄位清空用的 version key (遞增時輸入框會被強制清空重置)
+if "form_reset_counter" not in st.session_state:
+  st.session_state["form_reset_counter"] = 0
 
 # ==========================================
 # 主畫面區
@@ -214,23 +270,33 @@ st.divider()
 # ==========================================
 st.subheader("➕ 快速新增訂單")
 
-with st.container(border=True):
+with st.container():
+  # 用 counter 來重置輸入框
+  f_key = st.session_state["form_reset_counter"]
+
   col_n1, col_n2 = st.columns(2)
   with col_n1:
-    name = st.text_input("客戶姓名 / 稱呼 *", placeholder="例：陳小美")
+    name = st.text_input(
+        "客戶姓名 / 稱呼 *",
+        placeholder="例：陳小美",
+        key=f"input_name_{f_key}",
+    )
   with col_n2:
-    phone = st.text_input("聯絡電話 (選填)", placeholder="例：0912-345-678")
+    phone = st.text_input(
+        "聯絡電話 (選填)",
+        placeholder="例：0912-345-678",
+        key=f"input_phone_{f_key}",
+    )
 
   # 品項與口味編輯彈跳按鈕同一行
   c_lbl, c_btn = st.columns([3, 1])
   with c_lbl:
     st.markdown("##### 🛒 訂購品項")
   with c_btn:
-    # 彈跳視窗管理口味
     with st.popover("⚙️ 新增/編輯口味"):
       st.write("### 管理下拉選單口味")
       flavors_list = get_flavors()
-      new_flavor_input = st.text_input("新口味名稱")
+      new_flavor_input = st.text_input("新口味名稱", key="new_flav_input")
       if st.button("➕ 新增口味"):
         if new_flavor_input.strip():
           conn = sqlite3.connect(DB_FILE)
@@ -261,15 +327,20 @@ with st.container(border=True):
 
   flavor_options = get_flavors()
 
-  if "item_count" not in st.session_state:
-    st.session_state.item_count = 1
-
   selected_items_list = []
   for i in range(st.session_state.item_count):
     c_f, c_q, _ = st.columns([2.5, 1, 0.5])
-    f_sel = c_f.selectbox(f"口味 #{i+1}", flavor_options, key=f"f_new_{i}")
+    f_sel = c_f.selectbox(
+        f"口味 #{i+1}",
+        flavor_options,
+        key=f"f_new_{f_key}_{i}",
+    )
     q_sel = c_q.number_input(
-        f"數量 #{i+1}", min_value=1, max_value=50, value=1, key=f"q_new_{i}"
+        f"數量 #{i+1}",
+        min_value=1,
+        max_value=50,
+        value=1,
+        key=f"q_new_{f_key}_{i}",
     )
     selected_items_list.append(f"{f_sel} x {q_sel}")
 
@@ -283,25 +354,42 @@ with st.container(border=True):
 
   items_combined_str = ", ".join(selected_items_list)
 
-  col_pay, col_date, col_slot = st.columns(3)
+  col_pay, col_date_col, col_slot = st.columns(3)
   with col_pay:
     payment = st.radio(
-        "付款方式", ["已匯款", "現場付"], horizontal=True, key="pay_new"
+        "付款方式",
+        ["已匯款", "現場付"],
+        horizontal=True,
+        key=f"pay_new_{f_key}",
     )
-  with col_date:
-    # 預設為當前選擇的日期
-    pickup_date = st.date_input(
-        "預定取貨日期", value=cur_date, key="date_new"
-    )
+
+  with col_date_col:
+    # 預定取貨日期 + 快捷按鈕 [今天]
+    cd_label, cd_btn = st.columns([2.2, 1])
+    with cd_label:
+      pickup_date = st.date_input(
+          "預定取貨日期",
+          value=st.session_state["new_order_date"],
+          key=f"date_new_{f_key}",
+      )
+    with cd_btn:
+      st.write("")  # 垂直微調對齊
+      st.write("")
+      if st.button("📍 今天", use_container_width=True):
+        st.session_state["new_order_date"] = datetime.now().date()
+        st.rerun()
+
   with col_slot:
     time_slot = st.radio(
         "取貨時段",
         ["中午", "下午", "無指定"],
         horizontal=True,
-        key="slot_new",
+        key=f"slot_new_{f_key}",
     )
 
-  note = st.text_input("備註 (選填)", placeholder="例：要保冷袋")
+  note = st.text_input(
+      "備註 (選填)", placeholder="例：要保冷袋", key=f"note_new_{f_key}"
+  )
 
   if st.button("✅ 儲存送出訂單", use_container_width=True, type="primary"):
     if not name.strip():
@@ -316,8 +404,10 @@ with st.container(border=True):
           phone,
           note,
       )
-      st.session_state.item_count = 1  # 重置
-      st.success(f"已成功新增 {name} 的訂單！")
+      # 重置品項數與表單 counter
+      st.session_state.item_count = 1
+      st.session_state["form_reset_counter"] += 1
+      st.success(f"🎉 新增成功！已建立 {name} 的訂單。")
       st.rerun()
 
 st.divider()
@@ -334,7 +424,7 @@ else:
     order_id = row["id"]
     is_shipped = bool(row["shipped"])
 
-    with st.container(border=True):
+    with st.container():
       rc1, rc2, rc3, rc4 = st.columns([1.2, 2.5, 1.5, 1])
 
       with rc1:
@@ -346,7 +436,7 @@ else:
       with rc2:
         st.markdown(
             f"**{row['name']}** ({row['payment']})<br><span"
-            f" style='color: #666;'>{row['items']}</span>",
+            f" style='color: #ffe6e2;'>{row['items']}</span>",
             unsafe_allow_html=True,
         )
 
