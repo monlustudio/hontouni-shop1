@@ -89,15 +89,21 @@ def init_db():
             created_at TEXT
         )
     """)
+  # 檢查 flavors 表是否有 sort_order 欄位，沒有則自動補上
   c.execute("""
         CREATE TABLE IF NOT EXISTS flavors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            flavor_name TEXT UNIQUE
+            flavor_name TEXT UNIQUE,
+            sort_order INTEGER DEFAULT 0
         )
     """)
+  try:
+    c.execute("ALTER TABLE flavors ADD COLUMN sort_order INTEGER DEFAULT 0")
+  except:
+    pass
+
   c.execute("SELECT COUNT(*) FROM flavors")
   if c.fetchone()[0] == 0:
-    # 官網現售口味
     default_flavors = [
         "純紅豆餡大福",
         "純綠豆餡大福",
@@ -117,9 +123,11 @@ def init_db():
         "綜合豆系列大福",
         "綜合乳酪大福",
     ]
-    for f in default_flavors:
+    for idx, f in enumerate(default_flavors):
       c.execute(
-          "INSERT OR IGNORE INTO flavors (flavor_name) VALUES (?)", (f,)
+          "INSERT OR IGNORE INTO flavors (flavor_name, sort_order) VALUES (?,"
+          " ?)",
+          (f, idx),
       )
   conn.commit()
   conn.close()
@@ -130,9 +138,74 @@ init_db()
 
 def get_flavors():
   conn = sqlite3.connect(DB_FILE)
-  df = pd.read_sql("SELECT flavor_name FROM flavors ORDER BY id", conn)
+  df = pd.read_sql(
+      "SELECT flavor_name FROM flavors ORDER BY sort_order ASC, id ASC", conn
+  )
   conn.close()
   return df["flavor_name"].tolist()
+
+
+def get_flavor_records():
+  conn = sqlite3.connect(DB_FILE)
+  df = pd.read_sql(
+      "SELECT id, flavor_name, sort_order FROM flavors ORDER BY sort_order ASC,"
+      " id ASC",
+      conn,
+  )
+  conn.close()
+  return df
+
+
+def update_flavor_name(flavor_id, new_name):
+  conn = sqlite3.connect(DB_FILE)
+  c = conn.cursor()
+  try:
+    c.execute(
+        "UPDATE flavors SET flavor_name = ? WHERE id = ?", (new_name, flavor_id)
+    )
+    conn.commit()
+    success = True
+  except:
+    success = False
+  conn.close()
+  return success
+
+
+def move_flavor_order(flavor_id, direction):
+  conn = sqlite3.connect(DB_FILE)
+  c = conn.cursor()
+  df = get_flavor_records()
+  records = df.to_dict("records")
+
+  # 找到當前 index
+  idx = next((i for i, r in enumerate(records) if r["id"] == flavor_id), None)
+  if idx is not None:
+    if direction == "up" and idx > 0:
+      # 交換 sort_order
+      target_idx = idx - 1
+    elif direction == "down" and idx < len(records) - 1:
+      target_idx = idx + 1
+    else:
+      conn.close()
+      return
+
+    # 交換兩者的 sort_order
+    id1, order1 = records[idx]["id"], records[idx]["sort_order"]
+    id2, order2 = records[target_idx]["id"], records[target_idx]["sort_order"]
+
+    # 如果剛好 sort_order 相同，重新賦值全部順序
+    if order1 == order2:
+      for i, r in enumerate(records):
+        c.execute(
+            "UPDATE flavors SET sort_order = ? WHERE id = ?", (i, r["id"])
+        )
+      order1 = idx
+      order2 = target_idx if direction == "down" else idx - 1
+
+    c.execute("UPDATE flavors SET sort_order = ? WHERE id = ?", (order2, id1))
+    c.execute("UPDATE flavors SET sort_order = ? WHERE id = ?", (order1, id2))
+    conn.commit()
+  conn.close()
 
 
 def get_orders_by_date(date_str):
@@ -232,14 +305,13 @@ st.sidebar.title("🍡 紅斗泥管理選單")
 app_mode = st.sidebar.radio("選擇功能頁面", ["📋 訂單與取貨主頁", "⚙️ 編輯口味清單"])
 
 # ==========================================
-# 頁面一：編輯口味清單 (獨立頁面)
+# 頁面一：編輯口味清單 (獨立頁面：可新增、修改名稱、調整順序、刪除)
 # ==========================================
 if app_mode == "⚙️ 編輯口味清單":
-  st.title("⚙️ 編輯下拉選單口味")
-  st.write("在這裡可以新增或刪除結帳時可選擇的大福口味：")
+  st.title("⚙️ 編輯與管理下拉選單口味")
+  st.write("在這裡您可以新增口味、修改名稱，或是透過上下按鈕調整順序：")
 
-  flavors_list = get_flavors()
-
+  # 新增口味區
   with st.container():
     new_flavor_input = st.text_input("輸入新口味名稱")
     if st.button("➕ 新增口味"):
@@ -247,9 +319,14 @@ if app_mode == "⚙️ 編輯口味清單":
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         try:
+          # 取得目前最大的 sort_order
+          c.execute("SELECT MAX(sort_order) FROM flavors")
+          max_order = c.fetchone()[0]
+          next_order = 0 if max_order is None else max_order + 1
+
           c.execute(
-              "INSERT INTO flavors (flavor_name) VALUES (?)",
-              (new_flavor_input.strip(),),
+              "INSERT INTO flavors (flavor_name, sort_order) VALUES (?, ?)",
+              (new_flavor_input.strip(), next_order),
           )
           conn.commit()
           st.success(f"已成功新增口味：{new_flavor_input}")
@@ -259,17 +336,56 @@ if app_mode == "⚙️ 編輯口味清單":
         conn.close()
 
   st.divider()
-  st.subheader("現有口味列表")
-  for f in flavors_list:
-    fc1, fc2 = st.columns([3, 1])
-    fc1.write(f"• **{f}**")
-    if fc2.button("🗑️ 刪除", key=f"del_flav_{f}"):
-      conn = sqlite3.connect(DB_FILE)
-      c = conn.cursor()
-      c.execute("DELETE FROM flavors WHERE flavor_name = ?", (f,))
-      conn.commit()
-      conn.close()
-      st.rerun()
+  st.subheader("現有口味與排序調整")
+
+  flavors_df = get_flavor_records()
+
+  if flavors_df.empty:
+    st.info("目前沒有設定任何口味。")
+  else:
+    for idx, row in flavors_df.iterrows():
+      f_id = row["id"]
+      f_name = row["flavor_name"]
+
+      with st.container():
+        c_name, c_up, c_down, c_edit, c_del = st.columns(
+            [2.5, 0.8, 0.8, 1.2, 0.8]
+        )
+
+        with c_name:
+          st.markdown(f"**{f_name}**")
+
+        with c_up:
+          if st.button("⬆️ 往上", key=f"up_{f_id}"):
+            move_flavor_order(f_id, "up")
+            st.rerun()
+
+        with c_down:
+          if st.button("⬇️ 往下", key=f"down_{f_id}"):
+            move_flavor_order(f_id, "down")
+            st.rerun()
+
+        with c_edit:
+          with st.popover("✏️ 編輯"):
+            edit_name_input = st.text_input(
+                "修改名稱", value=f_name, key=f"edit_input_{f_id}"
+            )
+            if st.button("💾 儲存", key=f"save_edit_{f_id}"):
+              if edit_name_input.strip():
+                if update_flavor_name(f_id, edit_name_input.strip()):
+                  st.success("修改成功！")
+                  st.rerun()
+                else:
+                  st.error("修改失敗，該名稱可能已存在！")
+
+        with c_del:
+          if st.button("🗑️ 刪除", key=f"del_flav_{f_id}"):
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("DELETE FROM flavors WHERE id = ?", (f_id,))
+            conn.commit()
+            conn.close()
+            st.rerun()
 
 # ==========================================
 # 頁面二：訂單與取貨主頁
